@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Impostor Word Game</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+<div id="container">
+
+    <h1 class="title">IMPOSTOR</h1>
+
+    <!-- LOGIN -->
+    <div id="loginScreen" class="screen">
+        <input id="playerNameInput" placeholder="Your name">
+        <input id="roomCodeInput" placeholder="Room code">
+        <input id="roomPasswordInput" placeholder="Room password">
+        <button id="joinRoomBtn">Join Room</button>
+        <button id="createRoomBtn">Create Room</button>
+        <p id="loginError"></p>
+    </div>
+
+    <!-- LOBBY -->
+    <div id="lobbyScreen" class="screen hidden">
+        <h2>Lobby</h2>
+        <p id="lobbyCode"></p>
+        <p id="lobbyHost"></p>
+        <p><b>Players:</b></p>
+        <ul id="playerList"></ul>
+
+        <button id="startGameBtn" class="hostOnly hidden">Start Game</button>
+    </div>
+
+    <!-- TURN UI -->
+    <div id="turnScreen" class="screen hidden">
+        <h2 id="categoryDisplay"></h2>
+        <p id="hintDisplay" class="impostor"></p>
+
+        <p id="turnIndicator"></p>
+
+        <div id="shownWord" class="shownWord hidden"></div>
+
+        <div id="wordInputSection" class="hidden">
+            <input id="wordInput" placeholder="Your word">
+            <button id="submitWordBtn">Submit</button>
+        </div>
+    </div>
+
+    <!-- ROUND END -->
+    <div id="roundEndScreen" class="screen hidden">
+        <h2>Continue or Vote?</h2>
+        <button id="continueBtn">Continue</button>
+        <button id="voteNowBtn">Vote</button>
+        <p>Waiting for others...</p>
+    </div>
+
+    <!-- PLAYER VOTING -->
+    <div id="votingScreen" class="screen hidden">
+        <h2>Who is the Impostor?</h2>
+        <ul id="votingList"></ul>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="resultsScreen" class="screen hidden">
+        <h2 id="resultsMessage"></h2>
+        <button id="rematchBtn" class="hostOnly hidden">Play Again</button>
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
