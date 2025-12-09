@@ -1,5 +1,4 @@
-// -------- FIREBASE INIT --------
-// Put your Firebase config here
+// Replace with your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyAB-n2VgC8cFwS2_0XXbDXohDR1tbJmn1c",
   authDomain: "impostor-game-e2bec.firebaseapp.com",
@@ -13,271 +12,406 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// -------- GLOBALS --------
-let playerId = crypto.randomUUID();
-let playerName = "";
-let roomId = "";
-let roomRef = null;
-let unsubscribe = null;
-let playerRole = null; // "impostor" or "crewmate"
-
-// -------- DOM --------
-const screens = {
-  login: document.getElementById("loginScreen"),
-  lobby: document.getElementById("lobbyScreen"),
-  turn: document.getElementById("turnScreen"),
-  roundEnd: document.getElementById("roundEndScreen"),
-  voting: document.getElementById("votingScreen"),
-  results: document.getElementById("resultsScreen"),
+const wordBank = {
+  Animals: [
+    { word: "Elephant", hint: "Big ears" },
+    { word: "Tiger", hint: "Stripes" },
+    { word: "Kangaroo", hint: "Pouch" },
+  ],
+  Fruits: [
+    { word: "Apple", hint: "Keeps doctor away" },
+    { word: "Banana", hint: "Yellow peel" },
+    { word: "Cherry", hint: "Small and red" },
+  ],
+  Colors: [
+    { word: "Blue", hint: "Sky" },
+    { word: "Red", hint: "Stop sign" },
+    { word: "Green", hint: "Grass" },
+  ],
 };
 
-function show(screen) {
-  Object.values(screens).forEach((s) => s.classList.add("hidden"));
-  screen.classList.remove("hidden");
-}
+let playerId = null;
+let playerName = null;
+let roomCode = null;
+let roomRef = null;
 
-// -------- UI ELEMENTS --------
-const playerNameInput = document.getElementById("playerNameInput");
+const loginScreen = document.getElementById("loginScreen");
+const lobbyScreen = document.getElementById("lobbyScreen");
+const turnScreen = document.getElementById("turnScreen");
+const postRoundScreen = document.getElementById("postRoundScreen");
+const votingScreen = document.getElementById("votingScreen");
+const resultsScreen = document.getElementById("resultsScreen");
+
+const usernameInput = document.getElementById("usernameInput");
 const roomCodeInput = document.getElementById("roomCodeInput");
 const roomPasswordInput = document.getElementById("roomPasswordInput");
-const loginError = document.getElementById("loginError");
+const joinRoomBtn = document.getElementById("joinRoomBtn");
+const createRoomBtn = document.getElementById("createRoomBtn");
+const loginMessage = document.getElementById("loginMessage");
 
-const lobbyCodeSpan = document.getElementById("lobbyCode");
-const lobbyHostSpan = document.getElementById("lobbyHost");
-const playerListUl = document.getElementById("playerList");
+const roomCodeDisplay = document.getElementById("roomCodeDisplay");
+const playersList = document.getElementById("playersList");
 const startGameBtn = document.getElementById("startGameBtn");
 
+const roundNumberDisplay = document.getElementById("roundNumber");
 const categoryDisplay = document.getElementById("categoryDisplay");
-const hintDisplay = document.getElementById("hintDisplay");
 const turnIndicator = document.getElementById("turnIndicator");
-
+const hintDisplay = document.getElementById("hintDisplay");
 const shownWordDiv = document.getElementById("shownWord");
 const wordInputSection = document.getElementById("wordInputSection");
 const wordInput = document.getElementById("wordInput");
 const submitWordBtn = document.getElementById("submitWordBtn");
 
-const roundEndScreen = document.getElementById("roundEndScreen");
-const continueBtn = document.getElementById("continueBtn");
+const voteContinueBtn = document.getElementById("voteContinueBtn");
 const voteNowBtn = document.getElementById("voteNowBtn");
-const roundEndMsg = document.getElementById("roundEndMsg");
+const voteStatus = document.getElementById("voteStatus");
 
-const votingScreen = document.getElementById("votingScreen");
 const votingListUl = document.getElementById("votingList");
 const votingMsg = document.getElementById("votingMsg");
 
 const resultsMessage = document.getElementById("resultsMessage");
 const rematchBtn = document.getElementById("rematchBtn");
 
-// -------- EVENTS --------
-document.getElementById("joinRoomBtn").onclick = joinRoom;
-document.getElementById("createRoomBtn").onclick = createRoom;
-submitWordBtn.onclick = submitWord;
-continueBtn.onclick = voteContinue;
-voteNowBtn.onclick = voteNow;
-rematchBtn.onclick = rematch;
-startGameBtn.onclick = startGame;
+function show(screen) {
+  [loginScreen, lobbyScreen, turnScreen, postRoundScreen, votingScreen, resultsScreen].forEach(
+    (s) => s.classList.add("hidden")
+  );
+  screen.classList.remove("hidden");
+}
 
-// -------- WORD BANK --------
-const wordBank = {
-  Animals: [
-    { word: "elephant", hint: "Very big" },
-    { word: "cat", hint: "Small and quiet" },
-    { word: "giraffe", hint: "Very tall" },
-    { word: "lion", hint: "King of jungle" },
-  ],
-  Food: [
-    { word: "pizza", hint: "Popular" },
-    { word: "apple", hint: "Red or green" },
-    { word: "rice", hint: "Grain" },
-  ],
-  Sports: [
-    { word: "soccer", hint: "Ball and running" },
-    { word: "boxing", hint: "Punching" },
-    { word: "swimming", hint: "Water" },
-  ],
-};
+// Generate random ID
+function generateId() {
+  return Math.random().toString(36).substring(2, 10);
+}
 
-// -------- UTILS --------
-function sleep(ms) {
-  return new Promise((res) => setTimeout(res, ms));
+// Hash password with SHA-256
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 // -------- JOIN ROOM --------
 async function joinRoom() {
-  clearLoginError();
-  playerName = playerNameInput.value.trim();
-  const code = roomCodeInput.value.trim();
-  const pass = roomPasswordInput.value.trim();
+  playerName = usernameInput.value.trim();
+  roomCode = roomCodeInput.value.trim().toUpperCase();
+  const password = roomPasswordInput.value;
 
-  if (!playerName || !code || !pass) {
-    showLoginError("Fill all fields");
+  if (!playerName || !roomCode || !password) {
+    loginMessage.textContent = "Fill all fields";
+    return;
+  }
+  loginMessage.textContent = "";
+
+  roomRef = db.collection("rooms").doc(roomCode);
+  const roomSnap = await roomRef.get();
+  if (!roomSnap.exists) {
+    loginMessage.textContent = "Room does not exist";
     return;
   }
 
-  roomId = code;
-  roomRef = db.collection("rooms").doc(roomId);
-
-  try {
-    const snap = await roomRef.get();
-    if (!snap.exists) {
-      showLoginError("Room not found");
-      return;
-    }
-    const roomData = snap.data();
-
-    // Check password hash match
-    const passHash = await hashPassword(pass);
-    if (roomData.passwordHash !== passHash) {
-      showLoginError("Wrong password");
-      return;
-    }
-
-    // Add player if not exists
-    const players = roomData.players || [];
-    if (!players.find((p) => p.id === playerId)) {
-      players.push({ id: playerId, name: playerName });
-      await roomRef.update({ players });
-    }
-
-    attachListener();
-    show(screens.lobby);
-  } catch (err) {
-    showLoginError("Error joining room");
-    console.error(err);
+  const room = roomSnap.data();
+  const pwHash = await hashPassword(password);
+  if (pwHash !== room.passwordHash) {
+    loginMessage.textContent = "Incorrect password";
+    return;
   }
+
+  playerId = generateId();
+  const players = room.players || [];
+
+  // Check name taken
+  if (players.find((p) => p.name === playerName)) {
+    loginMessage.textContent = "Name already taken";
+    return;
+  }
+
+  players.push({ id: playerId, name: playerName });
+  await roomRef.update({ players });
+
+  listenToRoom();
+
+  show(lobbyScreen);
 }
 
 // -------- CREATE ROOM --------
 async function createRoom() {
-  clearLoginError();
-  playerName = playerNameInput.value.trim();
-  const code = roomCodeInput.value.trim();
-  const pass = roomPasswordInput.value.trim();
+  playerName = usernameInput.value.trim();
+  roomCode = roomCodeInput.value.trim().toUpperCase();
+  const password = roomPasswordInput.value;
 
-  if (!playerName || !code || !pass) {
-    showLoginError("Fill all fields");
+  if (!playerName || !roomCode || !password) {
+    loginMessage.textContent = "Fill all fields";
+    return;
+  }
+  loginMessage.textContent = "";
+
+  roomRef = db.collection("rooms").doc(roomCode);
+  const roomSnap = await roomRef.get();
+  if (roomSnap.exists) {
+    loginMessage.textContent = "Room code already exists";
     return;
   }
 
-  roomId = code;
-  roomRef = db.collection("rooms").doc(roomId);
+  playerId = generateId();
+  const pwHash = await hashPassword(password);
 
-  try {
-    const passHash = await hashPassword(pass);
+  await roomRef.set({
+    passwordHash: pwHash,
+    players: [{ id: playerId, name: playerName }],
+    hostId: playerId,
+    state: "lobby",
+  });
 
-    await roomRef.set({
-      passwordHash: passHash,
-      hostId: playerId,
-      players: [{ id: playerId, name: playerName }],
-      state: "lobby",
-      currentTurnIndex: 0,
-      currentWord: null,
-      roundNumber: 1,
-      impostorId: null,
-      category: null,
-      secretWord: null,
-      impostorHint: null,
-      phase: "lobby",
-      votesContinue: {},
-      votesVote: {},
-      finalVotes: {},
-      resultsMessage: null,
-    });
+  listenToRoom();
 
-    attachListener();
-    show(screens.lobby);
-  } catch (err) {
-    showLoginError("Error creating room");
-    console.error(err);
-  }
+  show(lobbyScreen);
 }
 
-function clearLoginError() {
-  loginError.textContent = "";
-}
-function showLoginError(msg) {
-  loginError.textContent = msg;
-}
-
-// -------- LISTENER --------
-function attachListener() {
-  if (unsubscribe) unsubscribe();
-
-  unsubscribe = roomRef.onSnapshot(async (snap) => {
-    if (!snap.exists) return;
-    const room = snap.data();
-
-    updateLobbyUI(room);
-
-    if (room.state === "lobby") {
-      show(screens.lobby);
-    } else if (room.state === "turn") {
-      show(screens.turn);
-      updateTurnUI(room);
-    } else if (room.state === "roundEnd") {
-      show(screens.roundEnd);
-      updateRoundEndUI(room);
-    } else if (room.state === "voting") {
-      show(screens.voting);
-      updateVotingUI(room);
-    } else if (room.state === "results") {
-      show(screens.results);
-      resultsMessage.textContent = room.resultsMessage || "";
-      updateRematchVisibility(room);
+// -------- LISTEN TO ROOM CHANGES --------
+function listenToRoom() {
+  roomRef.onSnapshot((doc) => {
+    const room = doc.data();
+    if (!room) {
+      alert("Room deleted");
+      location.reload();
+      return;
     }
 
-    // Host logic for votes and rounds
+    updateUI(room);
     hostGameLogic(room);
   });
 }
 
-// -------- LOBBY UI --------
-function updateLobbyUI(room) {
-  lobbyCodeSpan.textContent = roomId || "";
-  lobbyHostSpan.textContent = getPlayerName(room.hostId, room.players);
-  playerRole = playerId === room.impostorId ? "impostor" : "crewmate";
+// -------- UPDATE UI --------
+function updateUI(room) {
+  roomCodeDisplay.textContent = roomRef.id;
 
-  // Update player list
-  playerListUl.innerHTML = "";
-  if (room.players) {
-    room.players.forEach((p) => {
-      const li = document.createElement("li");
-      li.textContent = p.name;
-      playerListUl.appendChild(li);
-    });
+  // Update players list
+  playersList.innerHTML = "";
+  room.players.forEach((p) => {
+    const li = document.createElement("li");
+    li.textContent = p.name;
+    if (p.id === room.hostId) li.classList.add("host");
+    playersList.appendChild(li);
+  });
+
+  // Show start game button only to host if enough players
+  if (playerId === room.hostId && room.state === "lobby" && room.players.length >= 3) {
+    startGameBtn.classList.remove("hidden");
+  } else {
+    startGameBtn.classList.add("hidden");
   }
 
-  // Show start game only for host
-  if (playerId === room.hostId) {
-    startGameBtn.classList.add("hostOnly", "visible");
-  } else {
-    startGameBtn.classList.remove("hostOnly", "visible");
+  switch (room.state) {
+    case "lobby":
+      show(lobbyScreen);
+      break;
+
+    case "turn":
+      show(turnScreen);
+      updateTurnUI(room);
+      break;
+
+    case "roundEnd":
+      show(postRoundScreen);
+      updatePostRoundUI(room);
+      break;
+
+    case "voting":
+      show(votingScreen);
+      updateVotingUI(room);
+      break;
+
+    case "results":
+      show(resultsScreen);
+      updateResultsUI(room);
+      break;
+
+    default:
+      show(lobbyScreen);
   }
 }
 
-// -------- START GAME --------
-async function startGame() {
+// -------- UPDATE TURN UI --------
+function updateTurnUI(room) {
+  roundNumberDisplay.textContent = room.roundNumber || 1;
+  categoryDisplay.textContent = `Category: ${room.category || ""}`;
+
+  const currentPlayer = room.players[room.currentTurnIndex];
+  turnIndicator.textContent = `Current turn: ${currentPlayer ? currentPlayer.name : ""}`;
+
+  // Show hint only to impostor
+  if (playerId === room.impostorId) {
+    hintDisplay.textContent = `Hint: ${room.impostorHint}`;
+  } else {
+    hintDisplay.textContent = "";
+  }
+
+  // Show secret word only to crewmates and only if no word is currently shown
+  if (room.currentWord) {
+    shownWordDiv.textContent = room.currentWord;
+    shownWordDiv.classList.remove("hidden");
+    wordInputSection.classList.add("hidden");
+  } else {
+    shownWordDiv.textContent = playerId === room.impostorId ? room.impostorHint : room.secretWord || "";
+    shownWordDiv.classList.remove("hidden");
+    // Show input only if it's your turn and no word submitted yet
+    if (currentPlayer && currentPlayer.id === playerId) {
+      wordInputSection.classList.remove("hidden");
+      wordInput.value = "";
+      wordInput.focus();
+      submitWordBtn.disabled = false;
+    } else {
+      wordInputSection.classList.add("hidden");
+    }
+  }
+}
+
+// -------- SUBMIT WORD --------
+async function submitWord() {
+  const word = wordInput.value.trim();
+  if (!word) return;
+
+  const roomSnap = await roomRef.get();
+  const room = roomSnap.data();
+  if (!room) return;
+
+  const currentPlayer = room.players[room.currentTurnIndex];
+  if (!currentPlayer || currentPlayer.id !== playerId) return;
+
+  // Disable submit button to prevent double submits
+  submitWordBtn.disabled = true;
+
+  // Update currentWord so everyone sees it briefly
+  await roomRef.update({
+    currentWord: word,
+  });
+
+  if (playerId === room.hostId) {
+    setTimeout(async () => {
+      // Advance turn and clear currentWord
+      const freshSnap = await roomRef.get();
+      const freshRoom = freshSnap.data();
+      if (!freshRoom) return;
+
+      let nextIndex = freshRoom.currentTurnIndex + 1;
+
+      if (nextIndex >= freshRoom.players.length) {
+        // Round finished, prompt continue/vote
+        await roomRef.update({
+          state: "roundEnd",
+          currentTurnIndex: 0,
+          currentWord: null,
+          phase: "postRound",
+          votesContinue: {},
+          votesVote: {},
+        });
+      } else {
+        // Next turn
+        await roomRef.update({
+          currentTurnIndex: nextIndex,
+          currentWord: null,
+          phase: "turn",
+        });
+      }
+    }, 3000); // Show word for 3 seconds
+  }
+}
+
+// -------- UPDATE POST ROUND UI --------
+function updatePostRoundUI(room) {
+  voteStatus.textContent = `Votes Continue: ${Object.keys(room.votesContinue || {}).length} | Votes Vote: ${Object.keys(room.votesVote || {}).length}`;
+  // Disable buttons if player already voted
+  voteContinueBtn.disabled = !!room.votesContinue?.[playerId] || !!room.votesVote?.[playerId];
+  voteNowBtn.disabled = voteContinueBtn.disabled;
+}
+
+// -------- VOTE CONTINUE --------
+async function voteContinue() {
+  const update = {};
+  update[`votesContinue.${playerId}`] = true;
+  await roomRef.update(update);
+}
+
+// -------- VOTE NOW --------
+async function voteNow() {
+  const update = {};
+  update[`votesVote.${playerId}`] = true;
+  await roomRef.update(update);
+}
+
+// -------- UPDATE VOTING UI --------
+function updateVotingUI(room) {
+  votingListUl.innerHTML = "";
+  votingMsg.textContent = "";
+
+  room.players.forEach((p) => {
+    if (p.id === playerId) return; // can't vote self
+    const li = document.createElement("li");
+    li.textContent = p.name;
+    li.onclick = () => voteForPlayer(p.id);
+    votingListUl.appendChild(li);
+  });
+
+  if (room.finalVotes?.[playerId]) {
+    votingMsg.textContent = "You have voted";
+  } else {
+    votingMsg.textContent = "Click a player to vote them out";
+  }
+}
+
+// -------- VOTE FOR PLAYER --------
+async function voteForPlayer(votedId) {
+  const roomSnap = await roomRef.get();
+  const room = roomSnap.data();
+  if (!room) return;
+  if (room.finalVotes?.[playerId]) return; // already voted
+
+  const update = {};
+  update[`finalVotes.${playerId}`] = votedId;
+  await roomRef.update(update);
+}
+
+// -------- UPDATE RESULTS UI --------
+function updateResultsUI(room) {
+  resultsMessage.textContent = room.resultsMessage || "";
+
+  if (playerId === room.hostId) {
+    rematchBtn.classList.remove("hidden");
+  } else {
+    rematchBtn.classList.add("hidden");
+  }
+}
+
+// -------- REMATCH --------
+async function rematch() {
+  if (playerId !== (await (await roomRef.get()).data()).hostId) {
+    alert("Only host can start rematch");
+    return;
+  }
+
+  const categories = Object.keys(wordBank);
+  const category = categories[Math.floor(Math.random() * categories.length)];
+  const { word: secretWord, hint: impostorHint } = wordBank[category][
+    Math.floor(Math.random() * wordBank[category].length)
+  ];
+
   const roomSnap = await roomRef.get();
   const room = roomSnap.data();
   if (!room) return;
 
   const players = room.players;
   if (!players || players.length < 3) {
-    alert("Need at least 3 players to start");
+    alert("Need at least 3 players for rematch");
     return;
   }
 
   // Pick impostor randomly
   const impostor = players[Math.floor(Math.random() * players.length)];
-
-  // Pick category randomly from wordBank keys
-  const categories = Object.keys(wordBank);
-  const category = categories[Math.floor(Math.random() * categories.length)];
-
-  // Pick a word + hint from category
-  const { word: secretWord, hint: impostorHint } = wordBank[category][
-    Math.floor(Math.random() * wordBank[category].length)
-  ];
 
   await roomRef.update({
     state: "turn",
@@ -296,173 +430,11 @@ async function startGame() {
   });
 }
 
-// -------- TURN UI --------
-function updateTurnUI(room) {
-  categoryDisplay.textContent = `Category: ${room.category}`;
-  turnIndicator.textContent = `Current turn: ${
-    room.players[room.currentTurnIndex]?.name || ""
-  }`;
-  wordInput.value = "";
-  shownWordDiv.classList.add("hidden");
-  hintDisplay.textContent = "";
-
-  // Show hint only to impostor
-  if (playerId === room.impostorId) {
-    hintDisplay.textContent = `Hint: ${room.impostorHint}`;
-    shownWordDiv.classList.add("hidden");
-  } else {
-    // Show the secret word to crewmates
-    hintDisplay.textContent = "";
-    shownWordDiv.textContent = room.secretWord || "";
-    shownWordDiv.classList.remove("hidden");
-  }
-
-  // Show input only if it's your turn
-  if (room.players[room.currentTurnIndex]?.id === playerId) {
-    wordInputSection.classList.remove("hidden");
-  } else {
-    wordInputSection.classList.add("hidden");
-  }
-}
-
-// -------- SUBMIT WORD --------
-async function submitWord() {
-  const roomSnap = await roomRef.get();
-  const room = roomSnap.data();
-  if (!room) return;
-
-  if (room.players[room.currentTurnIndex].id !== playerId) return;
-
-  const word = wordInput.value.trim();
-  if (!word) return;
-
-  await roomRef.update({
-    currentWord: word,
-  });
-
-  // Show the word for 3 seconds, then advance turn or end round
-  setTimeout(async () => {
-    const freshSnap = await roomRef.get();
-    const freshRoom = freshSnap.data();
-    if (!freshRoom) return;
-
-    let nextIndex = freshRoom.currentTurnIndex + 1;
-
-    if (nextIndex >= freshRoom.players.length) {
-      // Round ends
-      await roomRef.update({
-        state: "roundEnd",
-        currentWord: null,
-        phase: "postRound",
-        votesContinue: {},
-        votesVote: {},
-      });
-    } else {
-      // Next turn
-      await roomRef.update({
-        currentTurnIndex: nextIndex,
-        currentWord: null,
-      });
-    }
-  }, 3000);
-}
-
-// -------- ROUND END UI --------
-function updateRoundEndUI(room) {
-  const contCount = Object.keys(room.votesContinue || {}).length;
-  const voteCount = Object.keys(room.votesVote || {}).length;
-  const total = room.players.length;
-  roundEndMsg.textContent = `Continue: ${contCount} / Vote: ${voteCount} / Players: ${total}`;
-}
-
-// -------- VOTE CONTINUE --------
-async function voteContinue() {
-  const update = {};
-  update[`votesContinue.${playerId}`] = true;
-  await roomRef.update(update);
-}
-
-// -------- VOTE NOW --------
-async function voteNow() {
-  const update = {};
-  update[`votesVote.${playerId}`] = true;
-  await roomRef.update(update);
-}
-
-// -------- VOTING UI --------
-function updateVotingUI(room) {
-  votingListUl.innerHTML = "";
-  room.players.forEach((p) => {
-    // Impostor can't vote for self, but voting UI shows all players except self
-    if (p.id === playerId) return;
-
-    const li = document.createElement("li");
-    li.textContent = p.name;
-    li.onclick = () => voteForPlayer(p.id);
-    votingListUl.appendChild(li);
-  });
-  votingMsg.textContent = "Click a player to vote them out.";
-}
-
-// -------- VOTE FOR PLAYER --------
-async function voteForPlayer(votedId) {
-  await roomRef.update({
-    [`finalVotes.${playerId}`]: votedId,
-  });
-}
-
-// -------- REMATCH --------
-async function rematch() {
-  const roomSnap = await roomRef.get();
-  const room = roomSnap.data();
-  if (!room) return;
-
-  if (playerId !== room.hostId) {
-    alert("Only the host can start a rematch");
-    return;
-  }
-
-  // Reset game data
-  await roomRef.update({
-    state: "lobby",
-    currentTurnIndex: 0,
-    currentWord: null,
-    roundNumber: 1,
-    impostorId: null,
-    category: null,
-    secretWord: null,
-    impostorHint: null,
-    phase: "lobby",
-    votesContinue: {},
-    votesVote: {},
-    finalVotes: {},
-    resultsMessage: null,
-  });
-}
-
-// -------- HELPER: GET PLAYER NAME --------
-function getPlayerName(id, players) {
-  const p = players.find((p) => p.id === id);
-  return p ? p.name : "";
-}
-
-// -------- HASH PASSWORD --------
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-// -------- HOST LOGIC --------
+// -------- HOST GAME LOGIC --------
 async function hostGameLogic(room) {
-  if (!room.hostId || playerId !== room.hostId) return;
-
+  if (playerId !== room.hostId) return;
   const total = room.players.length;
 
-  // Handle continue/vote tally after round end
   if (room.state === "roundEnd") {
     const contCount = Object.keys(room.votesContinue || {}).length;
     const voteCount = Object.keys(room.votesVote || {}).length;
@@ -471,22 +443,30 @@ async function hostGameLogic(room) {
       if (voteCount > contCount) {
         await roomRef.update({ state: "voting", phase: "voting" });
       } else {
-        await startNextRound(room);
+        // Continue next round, no new word/impostor
+        await roomRef.update({
+          state: "turn",
+          currentTurnIndex: 0,
+          currentWord: null,
+          phase: "turn",
+          roundNumber: (room.roundNumber || 1) + 1,
+          votesContinue: {},
+          votesVote: {},
+          finalVotes: {},
+          resultsMessage: null,
+        });
       }
     }
   }
 
-  // Handle vote tallying in voting phase
   if (room.state === "voting") {
     const votes = Object.values(room.finalVotes || {});
     if (votes.length === total) {
-      // Tally votes
       const counts = {};
       votes.forEach((v) => {
         counts[v] = (counts[v] || 0) + 1;
       });
 
-      // Find max votes
       let maxVotes = 0;
       let maxPlayer = null;
       for (const [pid, count] of Object.entries(counts)) {
@@ -511,53 +491,18 @@ async function hostGameLogic(room) {
   }
 }
 
-// -------- START NEXT ROUND --------
-async function startNextRound(room) {
-  const players = room.players;
-  if (!players || players.length < 3) {
-    await roomRef.update({
-      state: "results",
-      resultsMessage: "Not enough players to continue.",
-    });
-    return;
+// -------- EVENT LISTENERS --------
+joinRoomBtn.onclick = joinRoom;
+createRoomBtn.onclick = createRoom;
+startGameBtn.onclick = startGame;
+submitWordBtn.onclick = submitWord;
+voteContinueBtn.onclick = voteContinue;
+voteNowBtn.onclick = voteNow;
+rematchBtn.onclick = rematch;
+
+// Enter key submits word when focused
+wordInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    submitWord();
   }
-
-  // Pick new impostor randomly
-  const impostor = players[Math.floor(Math.random() * players.length)];
-
-  // Pick new category and word
-  const categories = Object.keys(wordBank);
-  const category = categories[Math.floor(Math.random() * categories.length)];
-
-  const { word: secretWord, hint: impostorHint } = wordBank[category][
-    Math.floor(Math.random() * wordBank[category].length)
-  ];
-
-  await roomRef.update({
-    state: "turn",
-    category,
-    secretWord,
-    impostorHint,
-    impostorId: impostor.id,
-    currentTurnIndex: 0,
-    currentWord: null,
-    roundNumber: (room.roundNumber || 1) + 1,
-    phase: "turn",
-    votesContinue: {},
-    votesVote: {},
-    finalVotes: {},
-    resultsMessage: null,
-  });
-}
-
-// -------- UPDATE REMATCH BUTTON --------
-function updateRematchVisibility(room) {
-  if (playerId === room.hostId) {
-    rematchBtn.classList.add("hostOnly", "visible");
-  } else {
-    rematchBtn.classList.remove("hostOnly", "visible");
-  }
-}
-
-// -------- INIT --------
-show(screens.login);
+});
