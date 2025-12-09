@@ -1,71 +1,144 @@
+/* Reset and base */
 body {
-    background: #111;
-    color: #eee;
-    font-family: Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-    padding-top: 30px;
+  background: #111;
+  color: #eee;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 30px 10px;
+  min-height: 100vh;
+  margin: 0;
 }
 
 #container {
-    background: #1a1a1a;
-    padding: 30px;
-    width: 380px;
-    border-radius: 15px;
-    box-shadow: 0 0 20px #0ff5;
-    text-align: center;
+  background: #1a1a1a;
+  padding: 30px 25px;
+  width: 400px;
+  border-radius: 15px;
+  box-shadow: 0 0 30px #0ff5;
+  text-align: center;
+  user-select: none;
 }
 
 .title {
-    font-size: 32px;
-    color: #0ff;
-    letter-spacing: 2px;
+  font-size: 36px;
+  color: #0ff;
+  letter-spacing: 3px;
+  margin-bottom: 30px;
 }
 
 .screen {
-    display: block;
+  display: block;
 }
 
 .hidden {
-    display: none !important;
+  display: none !important;
 }
 
 input {
-    width: 90%;
-    padding: 10px;
-    background: #222;
-    border: 1px solid #555;
-    color: #eee;
-    margin-bottom: 10px;
-    border-radius: 8px;
+  width: 90%;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  border-radius: 10px;
+  border: none;
+  background: #222;
+  color: #eee;
+  font-size: 16px;
+  outline: none;
+  transition: background 0.3s;
+}
+
+input:focus {
+  background: #0ff2;
+  color: #000;
+  font-weight: 600;
 }
 
 button {
-    padding: 10px 20px;
-    background: #0ff;
-    border: none;
-    border-radius: 8px;
-    color: #000;
-    font-weight: bold;
-    margin: 10px;
-    cursor: pointer;
+  background: #0ff;
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 28px;
+  margin: 8px 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 1.5px;
+  transition: background 0.3s;
 }
 
 button:hover {
-    background: #0cc;
+  background: #0cc;
+}
+
+.btn-group {
+  margin: 15px 0;
 }
 
 ul {
-    text-align: left;
+  text-align: left;
+  max-height: 150px;
+  overflow-y: auto;
+  padding-left: 20px;
+  margin: 0 auto 20px auto;
+}
+
+ul li {
+  padding: 8px 5px;
+  border-bottom: 1px solid #333;
+  cursor: default;
+}
+
+ul li:hover {
+  background: #0ff3;
+  color: #000;
 }
 
 .shownWord {
-    font-size: 26px;
-    color: #0ff;
-    margin: 20px 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #0ff;
+  margin: 25px 0;
+  letter-spacing: 2px;
 }
 
-.impostor {
-    color: #ff4444;
-    font-size: 14px;
+.impostorHint {
+  color: #ff4444;
+  font-weight: 600;
+  font-style: italic;
+  margin-bottom: 15px;
+}
+
+#turnIndicator {
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.error-msg {
+  color: #f44;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.hostOnly {
+  display: none;
+}
+
+.hostOnly.visible {
+  display: inline-block !important;
+}
+
+/* Voting list clickable */
+#votingList li {
+  cursor: pointer;
+  padding: 10px 5px;
+  border-radius: 8px;
+  transition: background 0.25s;
+}
+
+#votingList li:hover {
+  background: #0ff4;
+  color: #000;
 }
