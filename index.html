@@ -3,77 +3,67 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SKIBIDI TOILET</title>
+<title>Impostor Game</title>
 <link rel="stylesheet" href="style.css" />
-
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 </head>
 <body>
-<div id="container">
-  <h1 class="title">IMPOSTOR</h1>
 
-  <!-- LOGIN -->
-  <section id="loginScreen" class="screen">
-    <input id="playerNameInput" placeholder="Your name" autocomplete="off" />
-    <input id="roomCodeInput" placeholder="Room code" autocomplete="off" />
-    <input id="roomPasswordInput" placeholder="Room password" autocomplete="off" />
-    <div class="btn-group">
-      <button id="joinRoomBtn">Join Room</button>
-      <button id="createRoomBtn">Create Room</button>
-    </div>
-    <p id="loginError" class="error-msg"></p>
-  </section>
-
-  <!-- LOBBY -->
-  <section id="lobbyScreen" class="screen hidden">
-    <h2>Lobby</h2>
-    <p><b>Room:</b> <span id="lobbyCode"></span></p>
-    <p><b>Host:</b> <span id="lobbyHost"></span></p>
-    <p><b>Players:</b></p>
-    <ul id="playerList"></ul>
-    <button id="startGameBtn" class="hostOnly hidden">Start Game</button>
-  </section>
-
-  <!-- TURN PHASE -->
-  <section id="turnScreen" class="screen hidden">
-    <h2 id="categoryDisplay"></h2>
-    <p id="hintDisplay" class="impostorHint"></p>
-    <p id="turnIndicator"></p>
-
-    <div id="shownWord" class="shownWord hidden"></div>
-
-    <div id="wordInputSection" class="hidden">
-      <input id="wordInput" placeholder="Your word" autocomplete="off" />
-      <button id="submitWordBtn">Submit</button>
-    </div>
-  </section>
-
-  <!-- ROUND END -->
-  <section id="roundEndScreen" class="screen hidden">
-    <h2>Continue or Vote?</h2>
-    <div class="btn-group">
-      <button id="continueBtn">Continue</button>
-      <button id="voteNowBtn">Vote</button>
-    </div>
-    <p id="roundEndMsg">Waiting for others...</p>
-  </section>
-
-  <!-- VOTING -->
-  <section id="votingScreen" class="screen hidden">
-    <h2>Who is the Impostor?</h2>
-    <ul id="votingList"></ul>
-    <p id="votingMsg">Click a player to vote them out.</p>
-  </section>
-
-  <!-- RESULTS -->
-  <section id="resultsScreen" class="screen hidden">
-    <h2 id="resultsMessage"></h2>
-    <button id="rematchBtn" class="hostOnly hidden">Play Again</button>
-  </section>
+<div id="loginScreen" class="screen">
+  <h2>Join or Create Room</h2>
+  <input id="usernameInput" placeholder="Your name" />
+  <input id="roomCodeInput" placeholder="Room code" />
+  <input id="roomPasswordInput" placeholder="Room password" type="password" />
+  <button id="joinRoomBtn">Join Room</button>
+  <button id="createRoomBtn">Create Room</button>
+  <p id="loginMessage" class="message"></p>
 </div>
 
+<div id="lobbyScreen" class="screen hidden">
+  <h2>Lobby</h2>
+  <div>Room: <span id="roomCodeDisplay"></span></div>
+  <div>Players:</div>
+  <ul id="playersList"></ul>
+  <button id="startGameBtn" class="hostOnly hidden">Start Game</button>
+</div>
+
+<div id="turnScreen" class="screen hidden">
+  <h2>Round <span id="roundNumber"></span></h2>
+  <div id="categoryDisplay"></div>
+  <div id="turnIndicator"></div>
+  <div id="hintDisplay" class="hint"></div>
+
+  <div id="shownWord" class="wordDisplay hidden"></div>
+
+  <div id="wordInputSection">
+    <input id="wordInput" placeholder="Say one word" />
+    <button id="submitWordBtn">Submit Word</button>
+  </div>
+</div>
+
+<div id="postRoundScreen" class="screen hidden">
+  <h2>Round ended. What next?</h2>
+  <div>Choose to Continue or Vote</div>
+  <button id="voteContinueBtn">Continue</button>
+  <button id="voteNowBtn">Vote</button>
+  <div id="voteStatus"></div>
+</div>
+
+<div id="votingScreen" class="screen hidden">
+  <h2>Voting</h2>
+  <p>Click a player to vote them out:</p>
+  <ul id="votingList"></ul>
+  <div id="votingMsg"></div>
+</div>
+
+<div id="resultsScreen" class="screen hidden">
+  <h2>Game Results</h2>
+  <p id="resultsMessage"></p>
+  <button id="rematchBtn" class="hostOnly hidden">Rematch</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script src="script.js"></script>
+
 </body>
 </html>
