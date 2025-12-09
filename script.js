@@ -1,4 +1,5 @@
 // -------- FIREBASE INIT --------
+// Put your Firebase config here
 const firebaseConfig = {
   apiKey: "AIzaSyAB-n2VgC8cFwS2_0XXbDXohDR1tbJmn1c",
   authDomain: "impostor-game-e2bec.firebaseapp.com",
@@ -180,6 +181,7 @@ async function createRoom() {
       votesContinue: {},
       votesVote: {},
       finalVotes: {},
+      resultsMessage: null,
     });
 
     attachListener();
@@ -223,6 +225,9 @@ function attachListener() {
       resultsMessage.textContent = room.resultsMessage || "";
       updateRematchVisibility(room);
     }
+
+    // Host logic for votes and rounds
+    hostGameLogic(room);
   });
 }
 
@@ -294,7 +299,9 @@ async function startGame() {
 // -------- TURN UI --------
 function updateTurnUI(room) {
   categoryDisplay.textContent = `Category: ${room.category}`;
-  turnIndicator.textContent = `Current turn: ${room.players[room.currentTurnIndex]?.name || ""}`;
+  turnIndicator.textContent = `Current turn: ${
+    room.players[room.currentTurnIndex]?.name || ""
+  }`;
   wordInput.value = "";
   shownWordDiv.classList.add("hidden");
   hintDisplay.textContent = "";
@@ -302,11 +309,11 @@ function updateTurnUI(room) {
   // Show hint only to impostor
   if (playerId === room.impostorId) {
     hintDisplay.textContent = `Hint: ${room.impostorHint}`;
-  }
-
-  // Show word only to crewmates
-  if (playerId !== room.impostorId) {
-    shownWordDiv.textContent = room.secretWord;
+    shownWordDiv.classList.add("hidden");
+  } else {
+    // Show the secret word to crewmates
+    hintDisplay.textContent = "";
+    shownWordDiv.textContent = room.secretWord || "";
     shownWordDiv.classList.remove("hidden");
   }
 
@@ -362,22 +369,20 @@ async function submitWord() {
 
 // -------- ROUND END UI --------
 function updateRoundEndUI(room) {
-  roundEndMsg.textContent = "Waiting for others...";
-
-  // Show votes counts
   const contCount = Object.keys(room.votesContinue || {}).length;
   const voteCount = Object.keys(room.votesVote || {}).length;
   const total = room.players.length;
   roundEndMsg.textContent = `Continue: ${contCount} / Vote: ${voteCount} / Players: ${total}`;
 }
 
-// -------- CONTINUE OR VOTE --------
+// -------- VOTE CONTINUE --------
 async function voteContinue() {
   const update = {};
   update[`votesContinue.${playerId}`] = true;
   await roomRef.update(update);
 }
 
+// -------- VOTE NOW --------
 async function voteNow() {
   const update = {};
   update[`votesVote.${playerId}`] = true;
@@ -388,7 +393,8 @@ async function voteNow() {
 function updateVotingUI(room) {
   votingListUl.innerHTML = "";
   room.players.forEach((p) => {
-    if (p.id === room.impostorId) return; // Impostor cannot vote for self
+    // Impostor can't vote for self, but voting UI shows all players except self
+    if (p.id === playerId) return;
 
     const li = document.createElement("li");
     li.textContent = p.name;
@@ -398,6 +404,7 @@ function updateVotingUI(room) {
   votingMsg.textContent = "Click a player to vote them out.";
 }
 
+// -------- VOTE FOR PLAYER --------
 async function voteForPlayer(votedId) {
   await roomRef.update({
     [`finalVotes.${playerId}`]: votedId,
@@ -411,11 +418,11 @@ async function rematch() {
   if (!room) return;
 
   if (playerId !== room.hostId) {
-    alert("Only host can start rematch");
+    alert("Only the host can start a rematch");
     return;
   }
 
-  // Reset all game data and start new game
+  // Reset game data
   await roomRef.update({
     state: "lobby",
     currentTurnIndex: 0,
@@ -433,7 +440,7 @@ async function rematch() {
   });
 }
 
-// -------- HELPER --------
+// -------- HELPER: GET PLAYER NAME --------
 function getPlayerName(id, players) {
   const p = players.find((p) => p.id === id);
   return p ? p.name : "";
@@ -449,31 +456,28 @@ async function hashPassword(password) {
     .join("");
 }
 
-// -------- HOST LOGIC: listen for vote tally and round control --------
+// -------- HOST LOGIC --------
 async function hostGameLogic(room) {
   if (!room.hostId || playerId !== room.hostId) return;
 
-  // Voting resolution
+  const total = room.players.length;
+
+  // Handle continue/vote tally after round end
   if (room.state === "roundEnd") {
-    const total = room.players.length;
     const contCount = Object.keys(room.votesContinue || {}).length;
     const voteCount = Object.keys(room.votesVote || {}).length;
 
     if (contCount + voteCount === total && total > 0) {
-      // Decide whether vote or continue
       if (voteCount > contCount) {
-        // Go to voting
         await roomRef.update({ state: "voting", phase: "voting" });
       } else {
-        // Start next round
         await startNextRound(room);
       }
     }
   }
 
-  // Check if all votes cast during voting phase
+  // Handle vote tallying in voting phase
   if (room.state === "voting") {
-    const total = room.players.length;
     const votes = Object.values(room.finalVotes || {});
     if (votes.length === total) {
       // Tally votes
@@ -482,22 +486,20 @@ async function hostGameLogic(room) {
         counts[v] = (counts[v] || 0) + 1;
       });
 
-      // Find highest voted player
+      // Find max votes
       let maxVotes = 0;
       let maxPlayer = null;
-      for (const [player, count] of Object.entries(counts)) {
+      for (const [pid, count] of Object.entries(counts)) {
         if (count > maxVotes) {
           maxVotes = count;
-          maxPlayer = player;
+          maxPlayer = pid;
         }
       }
 
-      // Determine winner
-      const impostor = room.impostorId;
-      if (maxPlayer === impostor) {
+      if (maxPlayer === room.impostorId) {
         await roomRef.update({
           state: "results",
-          resultsMessage: "Crewmates win! Impostor was caught.",
+          resultsMessage: "Crewmates win! The impostor was caught.",
         });
       } else {
         await roomRef.update({
@@ -527,10 +529,9 @@ async function startNextRound(room) {
   const categories = Object.keys(wordBank);
   const category = categories[Math.floor(Math.random() * categories.length)];
 
-  const { word: secretWord, hint: impostorHint } =
-    wordBank[category][
-      Math.floor(Math.random() * wordBank[category].length)
-    ];
+  const { word: secretWord, hint: impostorHint } = wordBank[category][
+    Math.floor(Math.random() * wordBank[category].length)
+  ];
 
   await roomRef.update({
     state: "turn",
@@ -549,13 +550,14 @@ async function startNextRound(room) {
   });
 }
 
-// -------- UPDATE UI AFTER SNAPSHOT --------
-roomRef?.onSnapshot((snap) => {
-  if (!snap.exists) return;
-  const room = snap.data();
+// -------- UPDATE REMATCH BUTTON --------
+function updateRematchVisibility(room) {
+  if (playerId === room.hostId) {
+    rematchBtn.classList.add("hostOnly", "visible");
+  } else {
+    rematchBtn.classList.remove("hostOnly", "visible");
+  }
+}
 
-  hostGameLogic(room);
-});
-
-// -------- START SCREEN --------
+// -------- INIT --------
 show(screens.login);
